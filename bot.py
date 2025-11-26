@@ -1,5 +1,5 @@
 from telegram import Update
-from telegram.ext import Application, MessageHandler, filters, ContextTypes
+from telegram.ext import Application, MessageHandler, filters, ContextTypes, EditedMessageHandler
 import os
 import asyncio
 
@@ -45,7 +45,7 @@ async def check_timeout(msg_id, chat_id, bot):
             print(f"[ERROR] Ошибка при обработке сообщения {msg_id}: {e}")
 
 async def handle_edited_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Обработчик отредактированных сообщений (с добавленной реакцией)"""
+    """Обработчик отредактированных сообщений"""
     if not update.edited_message:
         return
     
@@ -53,9 +53,9 @@ async def handle_edited_message(update: Update, context: ContextTypes.DEFAULT_TY
     chat_id = update.edited_message.chat.id
     
     if chat_id == SOURCE_CHAT_ID and msg_id in pending_messages:
-        print(f"[REACTION_CHECK] Сообщение ID {msg_id} было отредактировано")
+        print(f"[INTERACTION] Сообщение ID {msg_id} было отредактировано")
         pending_messages[msg_id]['has_reaction'] = True
-        print(f"[MARKED] Сообщение ID {msg_id} помечено как имеющее взаимодействие - таймер отменён")
+        print(f"[MARKED] Сообщение ID {msg_id} помечено - таймер отменён")
 
 async def main():
     """Основная функция"""
@@ -65,7 +65,7 @@ async def main():
     app.add_handler(MessageHandler(filters.TEXT & filters.Chat(SOURCE_CHAT_ID), handle_keyword_message))
     
     # Обработчик отредактированных сообщений
-    app.add_handler(MessageHandler(filters.UPDATE & filters.Chat(SOURCE_CHAT_ID), handle_edited_message))
+    app.add_handler(EditedMessageHandler(filters.Chat(SOURCE_CHAT_ID), handle_edited_message))
     
     print("🤖 Бот запущен и готов к работе...")
     print(f"📍 Отслеживаемый канал/группа: {SOURCE_CHAT_ID}")
