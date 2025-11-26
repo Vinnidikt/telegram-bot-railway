@@ -1,8 +1,8 @@
 from telegram import Bot, Update
-from telegram.ext import Application, MessageHandler, filters, ContextTypes, ChatMemberHandler
+from telegram.ext import Application, MessageHandler, filters, ContextTypes
+from telegram.constants import ParseMode
 import os
 import asyncio
-import time
 
 API_TOKEN = os.getenv('API_TOKEN', '8188816335:AAHnLxlKDfTvcH_ILzTZT81kTj9CRIpgEZo')
 SOURCE_CHAT_ID = int(os.getenv('SOURCE_CHAT_ID', '2228201497'))
@@ -47,7 +47,10 @@ async def check_timeout(msg_id, chat_id, bot):
 
 async def handle_message_reaction(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Обработчик реакций на сообщения"""
+    print(f"[DEBUG] Обновление получено: {update}")
+    
     if not update.message_reaction:
+        print("[DEBUG] message_reaction = None")
         return
     
     reaction = update.message_reaction
@@ -55,6 +58,7 @@ async def handle_message_reaction(update: Update, context: ContextTypes.DEFAULT_
     chat_id = reaction.chat.id
     
     print(f"[DEBUG] Получена реакция на сообщение {msg_id} в чате {chat_id}")
+    print(f"[DEBUG] new_reaction: {reaction.new_reaction}")
     
     if chat_id == SOURCE_CHAT_ID and msg_id in pending_messages:
         if reaction.new_reaction:
@@ -62,13 +66,26 @@ async def handle_message_reaction(update: Update, context: ContextTypes.DEFAULT_
             pending_messages[msg_id]['has_reaction'] = True
             print(f"[MARKED] Сообщение ID {msg_id} помечено как имеющее реакцию - таймер отменён")
 
+async def handle_all_updates(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Ловушка для всех обновлений - для отладки"""
+    print(f"[ALL_UPDATES] Тип обновления: {update.update_id}, содержит: {update.to_dict().keys()}")
+
 async def main():
     """Основная функция"""
     app = Application.builder().token(API_TOKEN).build()
     
+    # Очень важно: указываем allowed_updates для получения реакций
+    # По умолчанию bot.infinity_polling() не получает message_reaction
+    await app.bot.set_my_commands([])
+    
     # Добавляем обработчики
     app.add_handler(MessageHandler(filters.TEXT & filters.Chat(SOURCE_CHAT_ID), handle_keyword_message))
+    
+    # Обработчик реакций (это самое важное!)
     app.add_handler(MessageHandler(filters.REACTION, handle_message_reaction))
+    
+    # Обработчик всех обновлений для отладки
+    app.add_handler(MessageHandler(~filters.COMMAND, handle_all_updates), group=1)
     
     print("🤖 Бот запущен и готов к работе...")
     print(f"📍 Отслеживаемый канал/группа: {SOURCE_CHAT_ID}")
@@ -77,7 +94,8 @@ async def main():
     print(f"➡️  Направление пересылки: {DEST_CHAT_ID}")
     print("-" * 50)
     
-    await app.run_polling()
+    # Важно: разрешить получение message_reaction обновлений
+    await app.run_polling(allowed_updates=["message", "message_reaction", "chat_member"])
 
 if __name__ == '__main__':
     asyncio.run(main())
