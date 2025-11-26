@@ -44,7 +44,7 @@ async def check_timeout(msg_id, chat_id, bot):
         except Exception as e:
             print(f"[ERROR] Ошибка: {e}")
 
-async def main():
+def main():
     """Основная функция"""
     app = Application.builder().token(API_TOKEN).build()
     
@@ -58,7 +58,8 @@ async def main():
     print(f"➡️  Направление пересылки: {DEST_CHAT_ID}")
     print("-" * 50)
     
-    await app.run_polling(allowed_updates=["message"])
+    # Запускаем бота БЕЗ asyncio.run()
+    app.run_polling(allowed_updates=["message"])
 
 if __name__ == '__main__':
-    asyncio.run(main())
+    main()
