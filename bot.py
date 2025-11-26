@@ -1,80 +1,41 @@
-from telegram import Update
-from telegram.ext import Application, MessageHandler, filters, ContextTypes, EditedMessageHandler
-import os
-import asyncio
-
-API_TOKEN = os.getenv('API_TOKEN', '8188816335:AAHnLxlKDfTvcH_ILzTZT81kTj9CRIpgEZo')
-SOURCE_CHAT_ID = int(os.getenv('SOURCE_CHAT_ID', '2228201497'))
-DEST_CHAT_ID = int(os.getenv('DEST_CHAT_ID', '2194287037'))
-KEYWORD = os.getenv('KEYWORD', '$$$')
-TIMEOUT = int(os.getenv('TIMEOUT', '3600'))
-
-pending_messages = {}
-
-async def handle_keyword_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Обработчик сообщений с ключевым словом"""
-    if not update.message or not update.message.text:
-        return
-    
-    msg_id = update.message.message_id
-    chat_id = update.message.chat.id
-    
-    if not update.message.text.startswith(KEYWORD):
-        return
-    
-    pending_messages[msg_id] = {'has_reaction': False}
-    
-    print(f"[MESSAGE] Получено сообщение ID {msg_id} с ключевым словом '{KEYWORD}'")
-    print(f"[TIMER] Начат таймер на {TIMEOUT} секунд...")
-    
-    # Запускаем таймер в отдельной задаче
-    asyncio.create_task(check_timeout(msg_id, chat_id, context.bot))
-
-async def check_timeout(msg_id, chat_id, bot):
-    """Проверка таймера и пересылка сообщения"""
-    await asyncio.sleep(TIMEOUT)
-    
-    if msg_id in pending_messages and not pending_messages[msg_id]['has_reaction']:
-        try:
-            print(f"[ACTION] Реакции не найдены. Пересылаю сообщение ID {msg_id}...")
-            await bot.forward_message(chat_id=DEST_CHAT_ID, from_chat_id=chat_id, message_id=msg_id)
-            await bot.delete_message(chat_id=chat_id, message_id=msg_id)
-            pending_messages.pop(msg_id, None)
-            print(f"[SUCCESS] Сообщение ID {msg_id} успешно переслано и удалено")
-        except Exception as e:
-            print(f"[ERROR] Ошибка при обработке сообщения {msg_id}: {e}")
-
-async def handle_edited_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Обработчик отредактированных сообщений"""
-    if not update.edited_message:
-        return
-    
-    msg_id = update.edited_message.message_id
-    chat_id = update.edited_message.chat.id
-    
-    if chat_id == SOURCE_CHAT_ID and msg_id in pending_messages:
-        print(f"[INTERACTION] Сообщение ID {msg_id} было отредактировано")
-        pending_messages[msg_id]['has_reaction'] = True
-        print(f"[MARKED] Сообщение ID {msg_id} помечено - таймер отменён")
-
-async def main():
-    """Основная функция"""
-    app = Application.builder().token(API_TOKEN).build()
-    
-    # Добавляем обработчик текстовых сообщений с ключевым словом
-    app.add_handler(MessageHandler(filters.TEXT & filters.Chat(SOURCE_CHAT_ID), handle_keyword_message))
-    
-    # Обработчик отредактированных сообщений
-    app.add_handler(EditedMessageHandler(filters.Chat(SOURCE_CHAT_ID), handle_edited_message))
-    
-    print("🤖 Бот запущен и готов к работе...")
-    print(f"📍 Отслеживаемый канал/группа: {SOURCE_CHAT_ID}")
-    print(f"🔑 Ключевое слово: {KEYWORD}")
-    print(f"⏱️  Таймер: {TIMEOUT} секунд")
-    print(f"➡️  Направление пересылки: {DEST_CHAT_ID}")
-    print("-" * 50)
-    
-    await app.run_polling(allowed_updates=["message", "edited_message"])
-
-if __name__ == '__main__':
-    asyncio.run(main())
+2025-11-26T13:01:29.000000000Z [inf]  Starting Container
+2025-11-26T13:01:30.329657808Z [err]  Traceback (most recent call last):
+2025-11-26T13:01:30.329662905Z [err]    File "/app/bot.py", line 2, in <module>
+2025-11-26T13:01:30.329669187Z [err]      from telegram.ext import Application, MessageHandler, filters, ContextTypes, EditedMessageHandler
+2025-11-26T13:01:30.329674092Z [err]  ImportError: cannot import name 'EditedMessageHandler' from 'telegram.ext' (/app/.venv/lib/python3.13/site-packages/telegram/ext/__init__.py)
+2025-11-26T13:01:32.538582927Z [err]  Traceback (most recent call last):
+2025-11-26T13:01:32.538589510Z [err]    File "/app/bot.py", line 2, in <module>
+2025-11-26T13:01:32.538594555Z [err]      from telegram.ext import Application, MessageHandler, filters, ContextTypes, EditedMessageHandler
+2025-11-26T13:01:32.538599269Z [err]  ImportError: cannot import name 'EditedMessageHandler' from 'telegram.ext' (/app/.venv/lib/python3.13/site-packages/telegram/ext/__init__.py)
+2025-11-26T13:01:35.428156008Z [err]  Traceback (most recent call last):
+2025-11-26T13:01:35.428160550Z [err]    File "/app/bot.py", line 2, in <module>
+2025-11-26T13:01:35.428166310Z [err]      from telegram.ext import Application, MessageHandler, filters, ContextTypes, EditedMessageHandler
+2025-11-26T13:01:35.428171702Z [err]  ImportError: cannot import name 'EditedMessageHandler' from 'telegram.ext' (/app/.venv/lib/python3.13/site-packages/telegram/ext/__init__.py)
+2025-11-26T13:01:36.699473049Z [err]  Traceback (most recent call last):
+2025-11-26T13:01:36.699477001Z [err]    File "/app/bot.py", line 2, in <module>
+2025-11-26T13:01:36.699480929Z [err]      from telegram.ext import Application, MessageHandler, filters, ContextTypes, EditedMessageHandler
+2025-11-26T13:01:36.699485140Z [err]  ImportError: cannot import name 'EditedMessageHandler' from 'telegram.ext' (/app/.venv/lib/python3.13/site-packages/telegram/ext/__init__.py)
+2025-11-26T13:01:38.521132112Z [err]  Traceback (most recent call last):
+2025-11-26T13:01:38.521139559Z [err]    File "/app/bot.py", line 2, in <module>
+2025-11-26T13:01:38.521146630Z [err]      from telegram.ext import Application, MessageHandler, filters, ContextTypes, EditedMessageHandler
+2025-11-26T13:01:38.521152873Z [err]  ImportError: cannot import name 'EditedMessageHandler' from 'telegram.ext' (/app/.venv/lib/python3.13/site-packages/telegram/ext/__init__.py)
+2025-11-26T13:01:40.953183791Z [err]  Traceback (most recent call last):
+2025-11-26T13:01:40.953189535Z [err]    File "/app/bot.py", line 2, in <module>
+2025-11-26T13:01:40.953200849Z [err]      from telegram.ext import Application, MessageHandler, filters, ContextTypes, EditedMessageHandler
+2025-11-26T13:01:40.953205586Z [err]  ImportError: cannot import name 'EditedMessageHandler' from 'telegram.ext' (/app/.venv/lib/python3.13/site-packages/telegram/ext/__init__.py)
+2025-11-26T13:01:42.991623351Z [err]  Traceback (most recent call last):
+2025-11-26T13:01:42.991630437Z [err]    File "/app/bot.py", line 2, in <module>
+2025-11-26T13:01:42.991637117Z [err]      from telegram.ext import Application, MessageHandler, filters, ContextTypes, EditedMessageHandler
+2025-11-26T13:01:42.991644269Z [err]  ImportError: cannot import name 'EditedMessageHandler' from 'telegram.ext' (/app/.venv/lib/python3.13/site-packages/telegram/ext/__init__.py)
+2025-11-26T13:01:45.927022006Z [err]  Traceback (most recent call last):
+2025-11-26T13:01:45.927026333Z [err]    File "/app/bot.py", line 2, in <module>
+2025-11-26T13:01:45.927030216Z [err]      from telegram.ext import Application, MessageHandler, filters, ContextTypes, EditedMessageHandler
+2025-11-26T13:01:45.927034925Z [err]  ImportError: cannot import name 'EditedMessageHandler' from 'telegram.ext' (/app/.venv/lib/python3.13/site-packages/telegram/ext/__init__.py)
+2025-11-26T13:01:49.402990161Z [err]  Traceback (most recent call last):
+2025-11-26T13:01:49.402994944Z [err]    File "/app/bot.py", line 2, in <module>
+2025-11-26T13:01:49.402999822Z [err]      from telegram.ext import Application, MessageHandler, filters, ContextTypes, EditedMessageHandler
+2025-11-26T13:01:49.403004307Z [err]  ImportError: cannot import name 'EditedMessageHandler' from 'telegram.ext' (/app/.venv/lib/python3.13/site-packages/telegram/ext/__init__.py)
+2025-11-26T13:01:52.838527664Z [err]  Traceback (most recent call last):
+2025-11-26T13:01:52.838543547Z [err]    File "/app/bot.py", line 2, in <module>
+2025-11-26T13:01:52.838547409Z [err]      from telegram.ext import Application, MessageHandler, filters, ContextTypes, EditedMessageHandler
+2025-11-26T13:01:52.838551440Z [err]  ImportError: cannot import name 'EditedMessageHandler' from 'telegram.ext' (/app/.venv/lib/python3.13/site-packages/telegram/ext/__init__.py)
