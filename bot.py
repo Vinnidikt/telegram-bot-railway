@@ -35,7 +35,8 @@ async def check_and_forward(context: ContextTypes.DEFAULT_TYPE):
             from_chat_id=chat_id,
             message_id=message_id
         )
-        logger.info(f"Сообщение {message_id} переслано из {chat_id} в {target_group}")
+        await context.bot.delete_message(chat_id=chat_id, message_id=message_id)
+        logger.info(f"Сообщение {message_id} переслано из {chat_id} в {target_group} и удалено")
     except Exception as e:
         logger.error(f"Ошибка пересылки: {e}")
 
