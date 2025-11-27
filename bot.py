@@ -17,6 +17,9 @@ GROUP_1 = -1003276951156
 GROUP_2 = -1003496475351
 MONITORED_GROUPS = [GROUP_1, GROUP_2]
 
+# Группа для проверки существования сообщений
+CHECK_GROUP_ID = -1003262009283
+
 KEYWORD = "$$$"
 TIMER_SECONDS = 3600  # 60 минут
 UPDATE_INTERVAL = 60  # Обновление таймера каждую минуту
@@ -26,6 +29,7 @@ async def update_timer(context: ContextTypes.DEFAULT_TYPE):
     job_data = context.job.data
     chat_id = job_data["chat_id"]
     timer_message_id = job_data["timer_message_id"]
+    original_message_id = job_data["original_message_id"]
     remaining = job_data["remaining"] - UPDATE_INTERVAL
     
     if remaining <= 0:
@@ -34,6 +38,30 @@ async def update_timer(context: ContextTypes.DEFAULT_TYPE):
         except:
             pass
         return
+    
+    # Проверяем существует ли оригинальное сообщение
+    if CHECK_GROUP_ID:
+        try:
+            # Пробуем переслать в приватную группу для проверки
+            check_msg = await context.bot.forward_message(
+                chat_id=CHECK_GROUP_ID,
+                from_chat_id=chat_id,
+                message_id=original_message_id
+            )
+            await context.bot.delete_message(chat_id=CHECK_GROUP_ID, message_id=check_msg.message_id)
+        except Exception as e:
+            if "message" in str(e).lower() and "not found" in str(e).lower():
+                # Оригинальное сообщение удалено - удаляем таймер и отменяем задачи
+                logger.info(f"Сообщение {original_message_id} удалено, отменяем таймер")
+                try:
+                    await context.bot.delete_message(chat_id=chat_id, message_id=timer_message_id)
+                except:
+                    pass
+                # Отменяем основной таймер пересылки
+                jobs = context.job_queue.get_jobs_by_name(f"check_{chat_id}_{original_message_id}")
+                for job in jobs:
+                    job.schedule_removal()
+                return
     
     job_data["remaining"] = remaining
     
@@ -48,7 +76,7 @@ async def update_timer(context: ContextTypes.DEFAULT_TYPE):
             update_timer,
             UPDATE_INTERVAL,
             data=job_data,
-            name=f"timer_{chat_id}_{job_data['original_message_id']}"
+            name=f"timer_{chat_id}_{original_message_id}"
         )
     except Exception as e:
         logger.error(f"Ошибка обновления таймера: {e}")
