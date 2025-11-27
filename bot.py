@@ -13,8 +13,8 @@ logger = logging.getLogger(__name__)
 BOT_TOKEN = os.getenv("BOT_TOKEN", "8188816335:AAHnLxlKDfTvcH_ILzTZT81kTj9CRIpgEZo")
 
 # Две группы для мониторинга
-GROUP_1 = -1003276951156
-GROUP_2 = -1003496475351
+GROUP_1 = -1002228201497
+GROUP_2 = -1002194287037
 MONITORED_GROUPS = [GROUP_1, GROUP_2]
 
 # Группа для проверки существования сообщений
