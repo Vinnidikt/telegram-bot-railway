@@ -83,38 +83,42 @@ async def check_and_forward(context: ContextTypes.DEFAULT_TYPE):
         )
         await context.bot.delete_message(chat_id=chat_id, message_id=message_id)
         logger.info(f"Сообщение {message_id} переслано из {chat_id} в {target_group} и удалено")
-        
-        # Отправляем таймер для пересланного сообщения
-        timer_msg = await context.bot.send_message(
-            chat_id=target_group,
-            text=f"⏱ Осталось {TIMER_SECONDS // 60} мин для реакции",
-            reply_to_message_id=forwarded.message_id
-        )
-        
-        # Запускаем обновление таймера
-        timer_data = {
-            "chat_id": target_group,
-            "timer_message_id": timer_msg.message_id,
-            "original_message_id": forwarded.message_id,
-            "remaining": TIMER_SECONDS
-        }
-        context.job_queue.run_once(
-            update_timer,
-            UPDATE_INTERVAL,
-            data=timer_data,
-            name=f"timer_{target_group}_{forwarded.message_id}"
-        )
-        
-        # Запускаем таймер для пересланного сообщения
-        context.job_queue.run_once(
-            check_and_forward,
-            TIMER_SECONDS,
-            data={"chat_id": target_group, "message_id": forwarded.message_id, "timer_message_id": timer_msg.message_id},
-            name=f"check_{target_group}_{forwarded.message_id}"
-        )
-        logger.info(f"Таймер запущен для пересланного сообщения {forwarded.message_id}")
     except Exception as e:
-        logger.error(f"Ошибка пересылки: {e}")
+        # Сообщение уже удалено - просто выходим
+        if "message to forward not found" in str(e).lower() or "message not found" in str(e).lower():
+            logger.info(f"Сообщение {message_id} уже удалено, пропускаем")
+            return
+        raise e
+    
+    # Отправляем таймер для пересланного сообщения
+    timer_msg = await context.bot.send_message(
+        chat_id=target_group,
+        text=f"⏱ Осталось {TIMER_SECONDS // 60} мин для реакции",
+        reply_to_message_id=forwarded.message_id
+    )
+    
+    # Запускаем обновление таймера
+    timer_data = {
+        "chat_id": target_group,
+        "timer_message_id": timer_msg.message_id,
+        "original_message_id": forwarded.message_id,
+        "remaining": TIMER_SECONDS
+    }
+    context.job_queue.run_once(
+        update_timer,
+        UPDATE_INTERVAL,
+        data=timer_data,
+        name=f"timer_{target_group}_{forwarded.message_id}"
+    )
+    
+    # Запускаем таймер для пересланного сообщения
+    context.job_queue.run_once(
+        check_and_forward,
+        TIMER_SECONDS,
+        data={"chat_id": target_group, "message_id": forwarded.message_id, "timer_message_id": timer_msg.message_id},
+        name=f"check_{target_group}_{forwarded.message_id}"
+    )
+    logger.info(f"Таймер запущен для пересланного сообщения {forwarded.message_id}")
 
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Обрабатывает сообщения с ключевым словом."""
