@@ -30,13 +30,22 @@ async def check_and_forward(context: ContextTypes.DEFAULT_TYPE):
     target_group = GROUP_2 if chat_id == GROUP_1 else GROUP_1
     
     try:
-        await context.bot.forward_message(
+        forwarded = await context.bot.forward_message(
             chat_id=target_group,
             from_chat_id=chat_id,
             message_id=message_id
         )
         await context.bot.delete_message(chat_id=chat_id, message_id=message_id)
         logger.info(f"Сообщение {message_id} переслано из {chat_id} в {target_group} и удалено")
+        
+        # Запускаем таймер для пересланного сообщения
+        context.job_queue.run_once(
+            check_and_forward,
+            TIMER_SECONDS,
+            data={"chat_id": target_group, "message_id": forwarded.message_id},
+            name=f"check_{target_group}_{forwarded.message_id}"
+        )
+        logger.info(f"Таймер запущен для пересланного сообщения {forwarded.message_id}")
     except Exception as e:
         logger.error(f"Ошибка пересылки: {e}")
 
