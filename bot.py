@@ -11,72 +11,70 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 BOT_TOKEN = os.getenv("BOT_TOKEN", "8188816335:AAHnLxlKDfTvcH_ILzTZT81kTj9CRIpgEZo")
-SOURCE_CHANNEL_ID = -1003276951156  # Канал-источник
-TARGET_GROUP_ID = -1003496475351    # Группа назначения
+
+# Две группы для мониторинга
+GROUP_1 = -1003276951156
+GROUP_2 = -1003496475351
+MONITORED_GROUPS = [GROUP_1, GROUP_2]
+
 KEYWORD = "$$$"
-TIMER_SECONDS = 60  # Время ожидания реакции (секунды)
+TIMER_SECONDS = 60
 
 async def check_and_forward(context: ContextTypes.DEFAULT_TYPE):
-    """Проверяет реакции и пересылает/удаляет сообщение если нет реакций."""
+    """Пересылает сообщение в другую группу если нет реакций."""
     job_data = context.job.data
     chat_id = job_data["chat_id"]
     message_id = job_data["message_id"]
     
+    # Определяем целевую группу (другая группа)
+    target_group = GROUP_2 if chat_id == GROUP_1 else GROUP_1
+    
     try:
-        # Пересылаем сообщение в целевую группу
         await context.bot.forward_message(
-            chat_id=TARGET_GROUP_ID,
+            chat_id=target_group,
             from_chat_id=chat_id,
             message_id=message_id
         )
-        # Удаляем оригинальное сообщение
-        await context.bot.delete_message(chat_id=chat_id, message_id=message_id)
-        print(f"Сообщение {message_id} переслано и удалено (нет реакций)")
+        logger.info(f"Сообщение {message_id} переслано из {chat_id} в {target_group}")
     except Exception as e:
-        print(f"Ошибка: {e}")
+        logger.error(f"Ошибка пересылки: {e}")
 
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Обрабатывает новые сообщения с ключевым словом."""
-    logger.info(f"Получен update: {update}")
-    
-    message = update.channel_post or update.message
-    if not message:
-        logger.info("Нет сообщения в update")
+    """Обрабатывает сообщения с ключевым словом."""
+    message = update.message
+    if not message or not message.text:
         return
     
     logger.info(f"Сообщение от chat_id: {message.chat_id}, текст: {message.text}")
     
-    if not message.text:
+    if message.chat_id not in MONITORED_GROUPS:
         return
     
     if KEYWORD in message.text:
-        logger.info(f"Обнаружено сообщение с {KEYWORD}: {message.message_id}")
-        # Запускаем таймер
+        logger.info(f"Обнаружено {KEYWORD} в сообщении {message.message_id}")
         context.job_queue.run_once(
             check_and_forward,
             TIMER_SECONDS,
             data={"chat_id": message.chat_id, "message_id": message.message_id},
-            name=f"check_{message.message_id}"
+            name=f"check_{message.chat_id}_{message.message_id}"
         )
 
 async def handle_reaction(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Отменяет таймер при получении реакции."""
     if update.message_reaction:
+        chat_id = update.message_reaction.chat.id
         message_id = update.message_reaction.message_id
-        job_name = f"check_{message_id}"
-        # Отменяем задачу если есть реакция
+        job_name = f"check_{chat_id}_{message_id}"
+        
         jobs = context.job_queue.get_jobs_by_name(job_name)
         for job in jobs:
             job.schedule_removal()
-            print(f"Таймер для сообщения {message_id} отменен (есть реакция)")
+            logger.info(f"Таймер для сообщения {message_id} отменен (есть реакция)")
 
 def main():
     app = Application.builder().token(BOT_TOKEN).build()
     
-    # Обработчик сообщений в канале
-    app.add_handler(MessageHandler(filters.ChatType.CHANNEL, handle_message))
-    
-    # Обработчик реакций
+    app.add_handler(MessageHandler(filters.TEXT & filters.ChatType.GROUPS, handle_message))
     app.add_handler(MessageReactionHandler(handle_reaction))
     
     logger.info("Бот запущен...")
