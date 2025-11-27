@@ -18,8 +18,8 @@ GROUP_2 = -1003496475351
 MONITORED_GROUPS = [GROUP_1, GROUP_2]
 
 KEYWORD = "$$$"
-TIMER_SECONDS = 60
-UPDATE_INTERVAL = 5  # Обновление таймера каждые 5 секунд
+TIMER_SECONDS = 3600  # 60 минут
+UPDATE_INTERVAL = 60  # Обновление таймера каждую минуту
 
 async def update_timer(context: ContextTypes.DEFAULT_TYPE):
     """Обновляет сообщение с таймером."""
@@ -41,7 +41,7 @@ async def update_timer(context: ContextTypes.DEFAULT_TYPE):
         await context.bot.edit_message_text(
             chat_id=chat_id,
             message_id=timer_message_id,
-            text=f"⏱ Осталось {remaining} сек для реакции"
+            text=f"⏱ Осталось {remaining // 60} мин для реакции"
         )
         # Планируем следующее обновление
         context.job_queue.run_once(
@@ -87,7 +87,7 @@ async def check_and_forward(context: ContextTypes.DEFAULT_TYPE):
         # Отправляем таймер для пересланного сообщения
         timer_msg = await context.bot.send_message(
             chat_id=target_group,
-            text=f"⏱ Осталось {TIMER_SECONDS} сек для реакции",
+            text=f"⏱ Осталось {TIMER_SECONDS // 60} мин для реакции",
             reply_to_message_id=forwarded.message_id
         )
         
@@ -133,7 +133,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         # Отправляем сообщение с таймером
         timer_msg = await context.bot.send_message(
             chat_id=message.chat_id,
-            text=f"⏱ Осталось {TIMER_SECONDS} сек для реакции",
+            text=f"⏱ Осталось {TIMER_SECONDS // 60} мин для реакции",
             reply_to_message_id=message.message_id
         )
         
