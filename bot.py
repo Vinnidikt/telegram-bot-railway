@@ -1,7 +1,14 @@
 import os
-import asyncio
-from telegram import Bot, Update
-from telegram.ext import Application, MessageHandler, filters, ContextTypes
+import logging
+from telegram import Update
+from telegram.ext import Application, MessageHandler, filters, ContextTypes, MessageReactionHandler
+
+# Логирование
+logging.basicConfig(
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+    level=logging.INFO
+)
+logger = logging.getLogger(__name__)
 
 BOT_TOKEN = os.getenv("BOT_TOKEN", "8188816335:AAHnLxlKDfTvcH_ILzTZT81kTj9CRIpgEZo")
 SOURCE_CHANNEL_ID = -1003276951156  # Канал-источник
@@ -30,12 +37,20 @@ async def check_and_forward(context: ContextTypes.DEFAULT_TYPE):
 
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Обрабатывает новые сообщения с ключевым словом."""
-    message = update.channel_post
-    if not message or not message.text:
+    logger.info(f"Получен update: {update}")
+    
+    message = update.channel_post or update.message
+    if not message:
+        logger.info("Нет сообщения в update")
+        return
+    
+    logger.info(f"Сообщение от chat_id: {message.chat_id}, текст: {message.text}")
+    
+    if not message.text:
         return
     
     if KEYWORD in message.text:
-        print(f"Обнаружено сообщение с {KEYWORD}: {message.message_id}")
+        logger.info(f"Обнаружено сообщение с {KEYWORD}: {message.message_id}")
         # Запускаем таймер
         context.job_queue.run_once(
             check_and_forward,
@@ -62,11 +77,10 @@ def main():
     app.add_handler(MessageHandler(filters.ChatType.CHANNEL, handle_message))
     
     # Обработчик реакций
-    from telegram.ext import MessageReactionHandler
     app.add_handler(MessageReactionHandler(handle_reaction))
     
-    print("Бот запущен...")
-    app.run_polling(allowed_updates=Update.ALL_TYPES)
+    logger.info("Бот запущен...")
+    app.run_polling(allowed_updates=Update.ALL_TYPES, drop_pending_updates=True)
 
 if __name__ == "__main__":
     main()
