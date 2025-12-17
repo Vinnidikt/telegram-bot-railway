@@ -10,7 +10,7 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-BOT_TOKEN = os.getenv("BOT_TOKEN", "8188816335:AAHnLxlKDfTvcH_ILzTZT81kTj9CRIpgEZo")
+BOT_TOKEN = os.getenv("BOT_TOKEN", "8580700829:AAHwNogMuXoGvsaPiy8MSqFzY-Sikzo0tiQ")
 
 # Две группы для мониторинга
 GROUP_1 = -1002228201497
