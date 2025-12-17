@@ -9,7 +9,7 @@ logging.basicConfig(
     level=logging.INFO
 )
 
-API_TOKEN = os.getenv('API_TOKEN', '8188816335:AAHnLxlKDfTvcH_ILzTZT81kTj9CRIpgEZo')
+API_TOKEN = os.getenv('API_TOKEN', '8580700829:AAFLYKifYGoSE2rxQAcdfeuMYwyz1DLcyuk')
 SOURCE_CHAT_ID = int(os.getenv('SOURCE_CHAT_ID', '2228201497'))
 DEST_CHAT_ID = int(os.getenv('DEST_CHAT_ID', '2194287037'))
 KEYWORD = os.getenv('KEYWORD', '$$$')
