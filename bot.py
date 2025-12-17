@@ -9,11 +9,16 @@ logging.basicConfig(
     level=logging.INFO
 )
 
-API_TOKEN = os.getenv('API_TOKEN', '8580700829:AAFLYKifYGoSE2rxQAcdfeuMYwyz1DLcyuk')
-SOURCE_CHAT_ID = int(os.getenv('SOURCE_CHAT_ID', '2228201497'))
-DEST_CHAT_ID = int(os.getenv('DEST_CHAT_ID', '2194287037'))
-KEYWORD = os.getenv('KEYWORD', '$$$')
-TIMEOUT = int(os.getenv('TIMEOUT', '3600'))
+# Получаем переменные только из окружения (без fallback)
+API_TOKEN = os.getenv('API_TOKEN')
+SOURCE_CHAT_ID = int(os.getenv('SOURCE_CHAT_ID'))
+DEST_CHAT_ID = int(os.getenv('DEST_CHAT_ID'))
+KEYWORD = os.getenv('KEYWORD')
+TIMEOUT = int(os.getenv('TIMEOUT'))
+
+# Проверяем что все переменные установлены
+if not all([API_TOKEN, SOURCE_CHAT_ID, DEST_CHAT_ID, KEYWORD, TIMEOUT]):
+    raise ValueError("❌ Не все переменные окружения установлены!")
 
 pending_messages = {}
 
@@ -45,9 +50,9 @@ async def handle_message_reaction(update: Update, context: ContextTypes.DEFAULT_
     chat_id = reaction.chat.id
     
     print(f"[🔔 REACTION_UPDATE] Получено обновление реакции:")
-    print(f"    - Сообщение ID: {msg_id}")
-    print(f"    - Чат ID: {chat_id}")
-    print(f"    - Новые реакции: {reaction.new_reaction}")
+    print(f" - Сообщение ID: {msg_id}")
+    print(f" - Чат ID: {chat_id}")
+    print(f" - Новые реакции: {reaction.new_reaction}")
     
     # Проверяем, есть ли новые реакции
     if reaction.new_reaction and len(reaction.new_reaction) > 0:
@@ -71,7 +76,7 @@ async def check_timeout(msg_id, chat_id, timeout, bot):
                     try:
                         print(f"[❌ NO_REACTION] Реакции не найдены. Пересылаю сообщение ID {msg_id}...")
                         await bot.forward_message(chat_id=DEST_CHAT_ID, from_chat_id=chat_id, message_id=msg_id)
-                        print(f"[🗑️  DELETING] Удаляю сообщение ID {msg_id}...")
+                        print(f"[🗑️ DELETING] Удаляю сообщение ID {msg_id}...")
                         await bot.delete_message(chat_id=chat_id, message_id=msg_id)
                         pending_messages.pop(msg_id, None)
                         print(f"[✅ COMPLETED] Сообщение ID {msg_id} успешно переслано и удалено")
@@ -86,7 +91,7 @@ async def check_timeout(msg_id, chat_id, timeout, bot):
         if int(elapsed) % 60 == 0 and int(elapsed) > 0:
             remaining = timeout - int(elapsed)
             status = "✅ ЕСТЬ РЕАКЦИЯ" if pending_messages.get(msg_id, {}).get('has_reaction') else "❌ НЕТ РЕАКЦИИ"
-            print(f"[⏱️  STATUS] Сообщение ID {msg_id}: {status}, осталось {remaining} сек")
+            print(f"[⏱️ STATUS] Сообщение ID {msg_id}: {status}, осталось {remaining} сек")
         
         await asyncio.sleep(1)
 
@@ -110,9 +115,9 @@ def main():
     print("🤖 Бот запущен и готов к работе...")
     print(f"📍 Отслеживаемый канал/группа: {SOURCE_CHAT_ID}")
     print(f"🔑 Ключевое слово: {KEYWORD}")
-    print(f"⏱️  Таймер: {TIMEOUT} секунд")
-    print(f"➡️  Направление пересылки: {DEST_CHAT_ID}")
-    print(f"👁️  Отслеживание реакций: ДА (через message_reaction обновления)")
+    print(f"⏱️ Таймер: {TIMEOUT} секунд")
+    print(f"➡️ Направление пересылки: {DEST_CHAT_ID}")
+    print(f"👁️ Отслеживание реакций: ДА (через message_reaction обновления)")
     print("=" * 60)
     
     app.run_polling(
