@@ -22,6 +22,11 @@ KEYWORD = "$$$"
 TIMER_SECONDS = 3600  # 60 минут
 UPDATE_INTERVAL = 60  # Обновление таймера каждую минуту
 
+# Получаем токен бота из переменных окружения
+BOT_TOKEN = os.getenv("BOT_TOKEN")
+if not BOT_TOKEN:
+    raise ValueError("BOT_TOKEN environment variable is not set")
+
 async def update_timer(context: ContextTypes.DEFAULT_TYPE):
     """Обновляет сообщение с таймером."""
     job_data = context.job.data
