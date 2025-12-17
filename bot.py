@@ -1,229 +1,124 @@
-import os
-import logging
 from telegram import Update
-from telegram.ext import Application, MessageHandler, filters, ContextTypes, MessageReactionHandler
+from telegram.ext import Application, MessageHandler, filters, ContextTypes, TypeHandler
+import os
+import asyncio
+import logging
 
-# Логирование
 logging.basicConfig(
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
     level=logging.INFO
 )
-logger = logging.getLogger(__name__)
 
-BOT_TOKEN = os.getenv("BOT_TOKEN", "8580700829:AAHwNogMuXoGvsaPiy8MSqFzY-Sikzo0tiQ")
+API_TOKEN = os.getenv('API_TOKEN', '8188816335:AAHnLxlKDfTvcH_ILzTZT81kTj9CRIpgEZo')
+SOURCE_CHAT_ID = int(os.getenv('SOURCE_CHAT_ID', '2228201497'))
+DEST_CHAT_ID = int(os.getenv('DEST_CHAT_ID', '2194287037'))
+KEYWORD = os.getenv('KEYWORD', '$$$')
+TIMEOUT = int(os.getenv('TIMEOUT', '3600'))
 
-# Две группы для мониторинга
-GROUP_1 = -1002228201497
-GROUP_2 = -1002194287037
-MONITORED_GROUPS = [GROUP_1, GROUP_2]
+pending_messages = {}
 
-# Группа для проверки существования сообщений
-CHECK_GROUP_ID = -1003262009283
-
-KEYWORD = "$$$"
-TIMER_SECONDS = 3600  # 60 минут
-UPDATE_INTERVAL = 60  # Обновление таймера каждую минуту
-
-async def update_timer(context: ContextTypes.DEFAULT_TYPE):
-    """Обновляет сообщение с таймером."""
-    job_data = context.job.data
-    chat_id = job_data["chat_id"]
-    timer_message_id = job_data["timer_message_id"]
-    original_message_id = job_data["original_message_id"]
-    remaining = job_data["remaining"] - UPDATE_INTERVAL
-    
-    if remaining <= 0:
-        try:
-            await context.bot.delete_message(chat_id=chat_id, message_id=timer_message_id)
-        except:
-            pass
+async def handle_keyword_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Обработчик сообщений с ключевым словом"""
+    if not update.message or not update.message.text:
         return
     
-    # Проверяем существует ли оригинальное сообщение
-    if CHECK_GROUP_ID:
-        try:
-            # Пробуем переслать в приватную группу для проверки
-            check_msg = await context.bot.forward_message(
-                chat_id=CHECK_GROUP_ID,
-                from_chat_id=chat_id,
-                message_id=original_message_id
-            )
-            await context.bot.delete_message(chat_id=CHECK_GROUP_ID, message_id=check_msg.message_id)
-        except Exception as e:
-            if "message" in str(e).lower() and "not found" in str(e).lower():
-                # Оригинальное сообщение удалено - удаляем таймер и отменяем задачи
-                logger.info(f"Сообщение {original_message_id} удалено, отменяем таймер")
-                try:
-                    await context.bot.delete_message(chat_id=chat_id, message_id=timer_message_id)
-                except:
-                    pass
-                # Отменяем основной таймер пересылки
-                jobs = context.job_queue.get_jobs_by_name(f"check_{chat_id}_{original_message_id}")
-                for job in jobs:
-                    job.schedule_removal()
-                return
+    msg_id = update.message.message_id
+    chat_id = update.message.chat.id
     
-    job_data["remaining"] = remaining
+    if not update.message.text.startswith(KEYWORD):
+        return
     
-    try:
-        await context.bot.edit_message_text(
-            chat_id=chat_id,
-            message_id=timer_message_id,
-            text=f"⏱ Осталось {remaining // 60} мин для реакции"
-        )
-        # Планируем следующее обновление
-        context.job_queue.run_once(
-            update_timer,
-            UPDATE_INTERVAL,
-            data=job_data,
-            name=f"timer_{chat_id}_{original_message_id}"
-        )
-    except Exception as e:
-        logger.error(f"Ошибка обновления таймера: {e}")
+    pending_messages[msg_id] = {'has_reaction': False, 'chat_id': chat_id}
+    
+    print(f"[MESSAGE] Получено сообщение ID {msg_id} с ключевым словом '{KEYWORD}'")
+    print(f"[TIMER] Начат таймер на {TIMEOUT} секунд...")
+    
+    asyncio.create_task(check_timeout(msg_id, chat_id, TIMEOUT, context.bot))
 
-async def check_and_forward(context: ContextTypes.DEFAULT_TYPE):
-    """Пересылает сообщение в другую группу если нет реакций."""
-    job_data = context.job.data
-    chat_id = job_data["chat_id"]
-    message_id = job_data["message_id"]
-    timer_message_id = job_data.get("timer_message_id")
+async def handle_message_reaction(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Обработчик обновлений о реакциях"""
+    if not update.message_reaction:
+        return
     
-    # Удаляем сообщение таймера
-    if timer_message_id:
-        try:
-            await context.bot.delete_message(chat_id=chat_id, message_id=timer_message_id)
-        except:
-            pass
+    reaction = update.message_reaction
+    msg_id = reaction.message_id
+    chat_id = reaction.chat.id
     
-    # Отменяем задачи обновления таймера
-    timer_jobs = context.job_queue.get_jobs_by_name(f"timer_{chat_id}_{message_id}")
-    for job in timer_jobs:
-        job.schedule_removal()
+    print(f"[🔔 REACTION_UPDATE] Получено обновление реакции:")
+    print(f"    - Сообщение ID: {msg_id}")
+    print(f"    - Чат ID: {chat_id}")
+    print(f"    - Новые реакции: {reaction.new_reaction}")
     
-    # Определяем целевую группу (другая группа)
-    target_group = GROUP_2 if chat_id == GROUP_1 else GROUP_1
+    # Проверяем, есть ли новые реакции
+    if reaction.new_reaction and len(reaction.new_reaction) > 0:
+        print(f"[✅ REACTION_DETECTED] Реакция найдена на сообщение ID {msg_id}")
+        if msg_id in pending_messages:
+            pending_messages[msg_id]['has_reaction'] = True
+            print(f"[✅ MARKED] Сообщение ID {msg_id} помечено как имеющее реакцию")
+
+async def check_timeout(msg_id, chat_id, timeout, bot):
+    """Проверяет таймер и пересылает сообщение если реакции нет"""
+    start_time = asyncio.get_event_loop().time()
     
-    try:
-        forwarded = await context.bot.forward_message(
-            chat_id=target_group,
-            from_chat_id=chat_id,
-            message_id=message_id
-        )
-        await context.bot.delete_message(chat_id=chat_id, message_id=message_id)
-        logger.info(f"Сообщение {message_id} переслано из {chat_id} в {target_group} и удалено")
-    except Exception as e:
-        # Сообщение уже удалено - просто выходим
-        if "message to forward not found" in str(e).lower() or "message not found" in str(e).lower():
-            logger.info(f"Сообщение {message_id} уже удалено, пропускаем")
+    while True:
+        elapsed = asyncio.get_event_loop().time() - start_time
+        
+        # Если время истекло
+        if elapsed >= timeout:
+            print(f"[⏰ TIMEOUT] Время истекло для сообщения ID {msg_id}")
+            if msg_id in pending_messages:
+                if not pending_messages[msg_id]['has_reaction']:
+                    try:
+                        print(f"[❌ NO_REACTION] Реакции не найдены. Пересылаю сообщение ID {msg_id}...")
+                        await bot.forward_message(chat_id=DEST_CHAT_ID, from_chat_id=chat_id, message_id=msg_id)
+                        print(f"[🗑️  DELETING] Удаляю сообщение ID {msg_id}...")
+                        await bot.delete_message(chat_id=chat_id, message_id=msg_id)
+                        pending_messages.pop(msg_id, None)
+                        print(f"[✅ COMPLETED] Сообщение ID {msg_id} успешно переслано и удалено")
+                    except Exception as e:
+                        print(f"[❌ ERROR] Ошибка при пересылке: {e}")
+                else:
+                    print(f"[✅ REACTION_SAVED] Сообщение ID {msg_id} не пересылается (есть реакция)")
+                    pending_messages.pop(msg_id, None)
             return
-        raise e
-    
-    # Отправляем таймер для пересланного сообщения
-    timer_msg = await context.bot.send_message(
-        chat_id=target_group,
-        text=f"⏱ Осталось {TIMER_SECONDS // 60} мин для реакции",
-        reply_to_message_id=forwarded.message_id
-    )
-    
-    # Запускаем обновление таймера
-    timer_data = {
-        "chat_id": target_group,
-        "timer_message_id": timer_msg.message_id,
-        "original_message_id": forwarded.message_id,
-        "remaining": TIMER_SECONDS
-    }
-    context.job_queue.run_once(
-        update_timer,
-        UPDATE_INTERVAL,
-        data=timer_data,
-        name=f"timer_{target_group}_{forwarded.message_id}"
-    )
-    
-    # Запускаем таймер для пересланного сообщения
-    context.job_queue.run_once(
-        check_and_forward,
-        TIMER_SECONDS,
-        data={"chat_id": target_group, "message_id": forwarded.message_id, "timer_message_id": timer_msg.message_id},
-        name=f"check_{target_group}_{forwarded.message_id}"
-    )
-    logger.info(f"Таймер запущен для пересланного сообщения {forwarded.message_id}")
+        
+        # Выводим статус каждые 60 секунд
+        if int(elapsed) % 60 == 0 and int(elapsed) > 0:
+            remaining = timeout - int(elapsed)
+            status = "✅ ЕСТЬ РЕАКЦИЯ" if pending_messages.get(msg_id, {}).get('has_reaction') else "❌ НЕТ РЕАКЦИИ"
+            print(f"[⏱️  STATUS] Сообщение ID {msg_id}: {status}, осталось {remaining} сек")
+        
+        await asyncio.sleep(1)
 
-async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Обрабатывает сообщения с ключевым словом."""
-    message = update.message
-    if not message or not message.text:
-        return
-    
-    logger.info(f"Сообщение от chat_id: {message.chat_id}, текст: {message.text}")
-    
-    if message.chat_id not in MONITORED_GROUPS:
-        return
-    
-    if KEYWORD in message.text:
-        logger.info(f"Обнаружено {KEYWORD} в сообщении {message.message_id}")
-        
-        # Отправляем сообщение с таймером
-        timer_msg = await context.bot.send_message(
-            chat_id=message.chat_id,
-            text=f"⏱ Осталось {TIMER_SECONDS // 60} мин для реакции",
-            reply_to_message_id=message.message_id
-        )
-        
-        # Запускаем обновление таймера
-        timer_data = {
-            "chat_id": message.chat_id,
-            "timer_message_id": timer_msg.message_id,
-            "original_message_id": message.message_id,
-            "remaining": TIMER_SECONDS
-        }
-        context.job_queue.run_once(
-            update_timer,
-            UPDATE_INTERVAL,
-            data=timer_data,
-            name=f"timer_{message.chat_id}_{message.message_id}"
-        )
-        
-        # Запускаем основной таймер
-        context.job_queue.run_once(
-            check_and_forward,
-            TIMER_SECONDS,
-            data={"chat_id": message.chat_id, "message_id": message.message_id, "timer_message_id": timer_msg.message_id},
-            name=f"check_{message.chat_id}_{message.message_id}"
-        )
-
-async def handle_reaction(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Отменяет таймер при получении реакции."""
-    if update.message_reaction:
-        chat_id = update.message_reaction.chat.id
-        message_id = update.message_reaction.message_id
-        
-        # Отменяем основной таймер
-        job_name = f"check_{chat_id}_{message_id}"
-        jobs = context.job_queue.get_jobs_by_name(job_name)
-        for job in jobs:
-            # Удаляем сообщение таймера
-            timer_message_id = job.data.get("timer_message_id")
-            if timer_message_id:
-                try:
-                    await context.bot.delete_message(chat_id=chat_id, message_id=timer_message_id)
-                except:
-                    pass
-            job.schedule_removal()
-            logger.info(f"Таймер для сообщения {message_id} отменен (есть реакция)")
-        
-        # Отменяем задачи обновления таймера
-        timer_jobs = context.job_queue.get_jobs_by_name(f"timer_{chat_id}_{message_id}")
-        for job in timer_jobs:
-            job.schedule_removal()
+async def error_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Обработчик ошибок"""
+    print(f"[❌ ERROR] Exception: {context.error}")
 
 def main():
-    app = Application.builder().token(BOT_TOKEN).build()
+    """Основная функция"""
+    app = Application.builder().token(API_TOKEN).build()
     
-    app.add_handler(MessageHandler(filters.TEXT & filters.ChatType.GROUPS, handle_message))
-    app.add_handler(MessageReactionHandler(handle_reaction))
+    # Обработчик текстовых сообщений
+    app.add_handler(MessageHandler(filters.TEXT & filters.Chat(SOURCE_CHAT_ID), handle_keyword_message))
     
-    logger.info("Бот запущен...")
-    app.run_polling(allowed_updates=Update.ALL_TYPES, drop_pending_updates=True)
+    # Обработчик реакций через TypeHandler
+    app.add_handler(TypeHandler(Update, handle_message_reaction), group=1)
+    
+    app.add_error_handler(error_handler)
+    
+    print("=" * 60)
+    print("🤖 Бот запущен и готов к работе...")
+    print(f"📍 Отслеживаемый канал/группа: {SOURCE_CHAT_ID}")
+    print(f"🔑 Ключевое слово: {KEYWORD}")
+    print(f"⏱️  Таймер: {TIMEOUT} секунд")
+    print(f"➡️  Направление пересылки: {DEST_CHAT_ID}")
+    print(f"👁️  Отслеживание реакций: ДА (через message_reaction обновления)")
+    print("=" * 60)
+    
+    app.run_polling(
+        allowed_updates=["message", "message_reaction"],
+        drop_pending_updates=True
+    )
 
-if __name__ == "__main__":
+if __name__ == '__main__':
     main()
