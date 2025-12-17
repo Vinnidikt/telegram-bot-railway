@@ -16,10 +16,6 @@ DEST_CHAT_ID = int(os.getenv('DEST_CHAT_ID', '2194287037'))
 KEYWORD = os.getenv('KEYWORD', '$$$')
 TIMEOUT = int(os.getenv('TIMEOUT', '3600'))
 
-# Проверяем что токен установлен
-if not API_TOKEN:
-    raise ValueError("❌ API_TOKEN не установлен в переменных окружения!")
-
 pending_messages = {}
 
 async def handle_keyword_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
