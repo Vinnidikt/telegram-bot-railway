@@ -20,7 +20,7 @@ CHECK_GROUP_ID = -1003262009283
 
 KEYWORD = "$$$"
 TIMER_SECONDS = 3600  # 60 минут
-UPDATE_INTERVAL = 60  # Обновление таймера каждую минуту
+UPDATE_INTERVAL = 120  # Обновление таймера каждую 2 минуту
 
 # Получаем токен бота из переменных окружения
 BOT_TOKEN = os.getenv("BOT_TOKEN")
