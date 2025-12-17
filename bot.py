@@ -9,16 +9,16 @@ logging.basicConfig(
     level=logging.INFO
 )
 
-# Получаем переменные только из окружения (без fallback)
-API_TOKEN = os.getenv('API_TOKEN')
-SOURCE_CHAT_ID = int(os.getenv('SOURCE_CHAT_ID'))
-DEST_CHAT_ID = int(os.getenv('DEST_CHAT_ID'))
-KEYWORD = os.getenv('KEYWORD')
-TIMEOUT = int(os.getenv('TIMEOUT'))
+# Получаем переменные с fallback значениями
+API_TOKEN = os.getenv('API_TOKEN', '')
+SOURCE_CHAT_ID = int(os.getenv('SOURCE_CHAT_ID', '2228201497'))
+DEST_CHAT_ID = int(os.getenv('DEST_CHAT_ID', '2194287037'))
+KEYWORD = os.getenv('KEYWORD', '$$$')
+TIMEOUT = int(os.getenv('TIMEOUT', '3600'))
 
-# Проверяем что все переменные установлены
-if not all([API_TOKEN, SOURCE_CHAT_ID, DEST_CHAT_ID, KEYWORD, TIMEOUT]):
-    raise ValueError("❌ Не все переменные окружения установлены!")
+# Проверяем что токен установлен
+if not API_TOKEN:
+    raise ValueError("❌ API_TOKEN не установлен в переменных окружения!")
 
 pending_messages = {}
 
@@ -54,7 +54,6 @@ async def handle_message_reaction(update: Update, context: ContextTypes.DEFAULT_
     print(f" - Чат ID: {chat_id}")
     print(f" - Новые реакции: {reaction.new_reaction}")
     
-    # Проверяем, есть ли новые реакции
     if reaction.new_reaction and len(reaction.new_reaction) > 0:
         print(f"[✅ REACTION_DETECTED] Реакция найдена на сообщение ID {msg_id}")
         if msg_id in pending_messages:
@@ -68,7 +67,6 @@ async def check_timeout(msg_id, chat_id, timeout, bot):
     while True:
         elapsed = asyncio.get_event_loop().time() - start_time
         
-        # Если время истекло
         if elapsed >= timeout:
             print(f"[⏰ TIMEOUT] Время истекло для сообщения ID {msg_id}")
             if msg_id in pending_messages:
@@ -87,7 +85,6 @@ async def check_timeout(msg_id, chat_id, timeout, bot):
                     pending_messages.pop(msg_id, None)
             return
         
-        # Выводим статус каждые 60 секунд
         if int(elapsed) % 60 == 0 and int(elapsed) > 0:
             remaining = timeout - int(elapsed)
             status = "✅ ЕСТЬ РЕАКЦИЯ" if pending_messages.get(msg_id, {}).get('has_reaction') else "❌ НЕТ РЕАКЦИИ"
@@ -103,12 +100,8 @@ def main():
     """Основная функция"""
     app = Application.builder().token(API_TOKEN).build()
     
-    # Обработчик текстовых сообщений
     app.add_handler(MessageHandler(filters.TEXT & filters.Chat(SOURCE_CHAT_ID), handle_keyword_message))
-    
-    # Обработчик реакций через TypeHandler
     app.add_handler(TypeHandler(Update, handle_message_reaction), group=1)
-    
     app.add_error_handler(error_handler)
     
     print("=" * 60)
@@ -117,7 +110,6 @@ def main():
     print(f"🔑 Ключевое слово: {KEYWORD}")
     print(f"⏱️ Таймер: {TIMEOUT} секунд")
     print(f"➡️ Направление пересылки: {DEST_CHAT_ID}")
-    print(f"👁️ Отслеживание реакций: ДА (через message_reaction обновления)")
     print("=" * 60)
     
     app.run_polling(
