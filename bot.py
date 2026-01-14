@@ -1,7 +1,14 @@
 import os
 import logging
 from telegram import Update
-from telegram.ext import Application, MessageHandler, filters, ContextTypes, MessageReactionHandler
+from telegram.ext import (
+    Application,
+    CommandHandler,
+    MessageHandler,
+    filters,
+    ContextTypes,
+    MessageReactionHandler,
+)
 
 # Логирование
 logging.basicConfig(
@@ -27,6 +34,87 @@ UPDATE_INTERVAL = 60  # Обновление таймера каждую мин�
 BOT_TOKEN = os.getenv("BOT_TOKEN")
 if not BOT_TOKEN:
     raise ValueError("BOT_TOKEN environment variable is not set")
+
+# Быстрое включение/выключение групп из ротации:
+# - Через Railway Variables: ROTATION_ENABLED_GROUPS="-100...,-100...,-452..."
+# - Или командами в CHECK_GROUP_ID: /enable <id>, /disable <id>, /status
+ROTATION_ENABLED_GROUPS_ENV = os.getenv("ROTATION_ENABLED_GROUPS")
+
+def _parse_enabled_groups(value: str | None) -> set[int] | None:
+    if not value:
+        return None
+    out: set[int] = set()
+    for part in value.split(","):
+        part = part.strip()
+        if not part:
+            continue
+        out.add(int(part))
+    return out
+
+# Состояние на время работы процесса (команды меняют это без перезапуска)
+enabled_groups_override: set[int] | None = _parse_enabled_groups(ROTATION_ENABLED_GROUPS_ENV)
+
+def get_enabled_groups() -> list[int]:
+    enabled = enabled_groups_override
+    if enabled is None:
+        return list(MONITORED_GROUPS)
+    return [g for g in MONITORED_GROUPS if g in enabled]
+
+def next_group(current_chat_id: int) -> int:
+    enabled = get_enabled_groups()
+    if not enabled:
+        # если отключили всё - ротация невозможна, оставляем как есть
+        return current_chat_id
+    if current_chat_id not in enabled:
+        return enabled[0]
+    idx = enabled.index(current_chat_id)
+    return enabled[(idx + 1) % len(enabled)]
+
+def is_control_chat(update: Update) -> bool:
+    return update.effective_chat is not None and update.effective_chat.id == CHECK_GROUP_ID
+
+async def cmd_status(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if not is_control_chat(update):
+        return
+    enabled = get_enabled_groups()
+    await update.effective_message.reply_text(
+        "Группы в ротации:\n"
+        + "\n".join([f"- {gid}" for gid in enabled])
+        + ("\n\n(ROTATION_ENABLED_GROUPS override активен)" if enabled_groups_override is not None else "")
+    )
+
+async def cmd_enable(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    global enabled_groups_override
+    if not is_control_chat(update):
+        return
+    if not context.args:
+        await update.effective_message.reply_text("Использование: /enable <group_id>")
+        return
+    gid = int(context.args[0])
+    if enabled_groups_override is None:
+        enabled_groups_override = set(MONITORED_GROUPS)
+    enabled_groups_override.add(gid)
+    await cmd_status(update, context)
+
+async def cmd_disable(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    global enabled_groups_override
+    if not is_control_chat(update):
+        return
+    if not context.args:
+        await update.effective_message.reply_text("Использование: /disable <group_id>")
+        return
+    gid = int(context.args[0])
+    if enabled_groups_override is None:
+        enabled_groups_override = set(MONITORED_GROUPS)
+    enabled_groups_override.discard(gid)
+    await cmd_status(update, context)
+
+async def cmd_reset(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    global enabled_groups_override
+    if not is_control_chat(update):
+        return
+    enabled_groups_override = _parse_enabled_groups(os.getenv("ROTATION_ENABLED_GROUPS"))
+    await cmd_status(update, context)
 
 async def update_timer(context: ContextTypes.DEFAULT_TYPE):
     """Обновляет сообщение с таймером."""
@@ -104,15 +192,8 @@ async def check_and_forward(context: ContextTypes.DEFAULT_TYPE):
     for job in timer_jobs:
         job.schedule_removal()
     
-    # Определяем целевую группу (ротация: GROUP_1 → GROUP_2 → GROUP_3 → GROUP_1)
-    if chat_id == GROUP_1:
-        target_group = GROUP_2
-    elif chat_id == GROUP_2:
-        target_group = GROUP_3
-    elif chat_id == GROUP_3:
-        target_group = GROUP_1
-    else:
-        target_group = GROUP_1  # По умолчанию
+    # Определяем целевую группу с учетом выключенных групп
+    target_group = next_group(chat_id)
     
     try:
         forwarded = await context.bot.forward_message(
@@ -168,7 +249,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     logger.info(f"Сообщение от chat_id: {message.chat_id}, текст: {message.text}")
     
-    if message.chat_id not in MONITORED_GROUPS:
+    if message.chat_id not in get_enabled_groups():
         return
     
     if KEYWORD in message.text:
@@ -231,6 +312,12 @@ async def handle_reaction(update: Update, context: ContextTypes.DEFAULT_TYPE):
 def main():
     app = Application.builder().token(BOT_TOKEN).build()
     
+    # Команды управления (работают только в CHECK_GROUP_ID)
+    app.add_handler(CommandHandler("status", cmd_status))
+    app.add_handler(CommandHandler("enable", cmd_enable))
+    app.add_handler(CommandHandler("disable", cmd_disable))
+    app.add_handler(CommandHandler("reset", cmd_reset))
+
     # Обрабатываем текст и в группах, и в каналах
     app.add_handler(MessageHandler(filters.TEXT & (filters.ChatType.GROUPS | filters.ChatType.CHANNEL), handle_message))
     app.add_handler(MessageReactionHandler(handle_reaction))
