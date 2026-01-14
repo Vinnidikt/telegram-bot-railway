@@ -160,8 +160,9 @@ async def check_and_forward(context: ContextTypes.DEFAULT_TYPE):
     logger.info(f"Таймер запущен для пересланного сообщения {forwarded.message_id}")
 
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Обрабатывает сообщения с ключевым словом."""
-    message = update.message
+    """Обрабатывает сообщения с ключевым словом в группах и каналах."""
+    # effective_message работает и для групп (message), и для каналов (channel_post)
+    message = update.effective_message
     if not message or not message.text:
         return
     
@@ -230,7 +231,8 @@ async def handle_reaction(update: Update, context: ContextTypes.DEFAULT_TYPE):
 def main():
     app = Application.builder().token(BOT_TOKEN).build()
     
-    app.add_handler(MessageHandler(filters.TEXT & filters.ChatType.GROUPS, handle_message))
+    # Обрабатываем текст и в группах, и в каналах
+    app.add_handler(MessageHandler(filters.TEXT & (filters.ChatType.GROUPS | filters.ChatType.CHANNEL), handle_message))
     app.add_handler(MessageReactionHandler(handle_reaction))
     
     logger.info("Бот запущен...")
