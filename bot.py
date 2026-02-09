@@ -252,6 +252,10 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if message.chat_id not in get_enabled_groups():
         return
     
+    # Игнорируем ответы (reply) на другие сообщения — реагируем только на основные
+    if message.reply_to_message:
+        return
+    
     if KEYWORD in message.text:
         logger.info(f"Обнаружено {KEYWORD} в сообщении {message.message_id}")
         
